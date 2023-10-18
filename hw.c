@@ -45,6 +45,12 @@ u8 cck_sifs_man = 10;
 u8 ofdm_sifs_man = 16;
 u8 slottime_man = 9;
 u8 thresh62_man = 28;
+u8 disable_CS  = 1;
+u8 disable_CS_man = 0;
+u8 CTSTimeOut_man = 0;
+u8 ACKTimeOut_man = 0;
+u8 CTSTimeOut = 0;
+u8 ACKTimeOut = 0;
 
 module_param_named(txpower,tx_power_man,byte,0444);
 MODULE_PARM_DESC(txpower,"Manual TX power setting, default 58, max 63");
@@ -69,6 +75,15 @@ MODULE_PARM_DESC(slottime,"Slottime setting, default 9");
 
 module_param_named(thresh62,thresh62_man,byte,0444);
 MODULE_PARM_DESC(thresh62,"CCA THRESH62 setting, default 28");
+
+ module_param_named(disable_CS,disable_CS_man,byte,0444);
+ MODULE_PARM_DESC(disable_CS,"Disable Carrier Sense  default 0");
+
+module_param_named(CTSTimeOut,CTSTimeOut_man,byte,0444);
+ MODULE_PARM_DESC(CTSTimeOut,"CTSTimeOut  default 0");
+ 
+ module_param_named(ACKTimeOut,ACKTimeOut_man,byte,0444);
+ MODULE_PARM_DESC(ACKTimeOut,"ACKTimeOut  default 0");
 
 
 static void ath9k_hw_set_clockrate(struct ath_hw *ah)
@@ -1053,6 +1068,7 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 	int sifstime;
 	int rx_lat = 0, tx_lat = 0, eifs = 0;
 	u32 reg;
+	int qnum=0;
 
 	ath_dbg(ath9k_hw_common(ah), RESET, "ah->misc_mode 0x%x\n",
 		ah->misc_mode);
@@ -1111,7 +1127,8 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 
 	/* As defined by IEEE 802.11-2007 17.3.8.6 */
 //	slottime += 3 * ah->coverage_class;
-       slottime = slottime_man;
+	//As defined in driver config
+    slottime = slottime_man;
 	acktimeout = slottime + sifstime + ack_offset;
 	ctstimeout = acktimeout;
 
@@ -1136,6 +1153,19 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 		ah->dynack.ackto = acktimeout;
 	}
 
+	if (ofdm_sifs_man!=16) {
+			sifstime=ofdm_sifs_man;
+			eifs=ofdm_sifs_man;		
+	}
+	if (ACKTimeOut_man!=0)
+			acktimeout=	ACKTimeOut_man;
+	if (CTSTimeOut_man!=0)
+			ctstimeout=CTSTimeOut_man;
+	
+
+	if (cck_sifs_man!=10)
+		tx_lat=cck_sifs_man*10;
+
 	ath9k_hw_set_sifs_time(ah, sifstime);
 	ath9k_hw_setslottime(ah, slottime);
 	ath9k_hw_set_ack_timeout(ah, acktimeout);
@@ -1149,6 +1179,18 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 		SM(rx_lat, AR_USEC_RX_LAT) |
 		SM(tx_lat, AR_USEC_TX_LAT),
 		AR_USEC_TX_LAT | AR_USEC_RX_LAT | AR_USEC_USEC);
+
+	ath_err(common,"SET rx_lat:%d, tx_lat:%d, sifstime:%d, eifs:%d, slottime:%d, acktimeout:%d, ctstimeout:%d",rx_lat, tx_lat, sifstime, eifs, slottime, acktimeout, ctstimeout);
+
+	 if(disable_CS_man==1){
+ 		ath_err(ath9k_hw_common(ah),  "Disable Carrier Sense! %d !\n",disable_CS, disable_CS_man);
+ 		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_RX_CLEAR);
+    	REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_IGNORE_VIRT_CS);
+ 		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
+	}
+	
+		for (qnum=0;qnum<7;qnum++)
+			REG_WRITE(ah, AR_DLCL_IFS(qnum), 0);
 
 }
 EXPORT_SYMBOL(ath9k_hw_init_global_settings);

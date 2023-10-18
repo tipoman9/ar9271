@@ -223,8 +223,8 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 	if (qinfo->tqi_aifs != ATH9K_TXQ_USEDEFAULT)
 		qi->tqi_aifs = min(qinfo->tqi_aifs, 255U);
 	else
-//		qi->tqi_aifs = INIT_AIFS;
-               qi->tqi_aifs = aifs_man;
+		qi->tqi_aifs = INIT_AIFS;
+
 	if (qinfo->tqi_cwmin != ATH9K_TXQ_USEDEFAULT) {
 		cw = min(qinfo->tqi_cwmin, 1024U);
 		qi->tqi_cwmin = 1;
@@ -253,6 +253,13 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 	qi->tqi_burstTime = qinfo->tqi_burstTime;
 	qi->tqi_readyTime = qinfo->tqi_readyTime;
 
+	if (cwmax_man!=15)
+			qi->tqi_cwmax=cwmax_man;
+	if (cwmin_man!=7)
+			qi->tqi_cwmin=cwmin_man;
+	if (aifs_man!=2)
+	        qi->tqi_aifs = aifs_man;
+
 	switch (qinfo->tqi_subtype) {
 	case ATH9K_WME_UPSD:
 		if (qi->tqi_type == ATH9K_TX_QUEUE_DATA)
@@ -261,6 +268,11 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 	default:
 		break;
 	}
+
+	
+	REG_WRITE(ah, AR_DLCL_IFS(q), 0);
+
+	ath_err(common, "SET cwmax:%d, cwmin:%d, aifs:%d  for queu:%d", qi->tqi_cwmax, qi->tqi_cwmin, qi->tqi_aifs,q);
 
 	return true;
 }
