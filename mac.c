@@ -258,7 +258,7 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 			qi->tqi_cwmax=cwmax_man;
 			override=true;
 	}
-	if (cwmin_man!=7)
+	if (cwmin_man!=7){
 			qi->tqi_cwmin=cwmin_man;
 			override=true;
 	}

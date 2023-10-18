@@ -1196,7 +1196,7 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
  		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
 	}
 
-	if (register_overridetrue || disable_CS_man==1){	
+	if (register_override || disable_CS_man==1){	
 		for (qnum=0;qnum<7;qnum++)
 			REG_WRITE(ah, AR_DLCL_IFS(qnum), 0);
 	}
