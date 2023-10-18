@@ -1,0 +1,156 @@
+diff --git a/hw.c b/hw.c
+index ae9d5e1..9267158 100644
+--- a/hw.c
++++ b/hw.c
+@@ -45,6 +45,12 @@ u8 cck_sifs_man = 10;
+ u8 ofdm_sifs_man = 16;
+ u8 slottime_man = 9;
+ u8 thresh62_man = 28;
++u8 disable_CS  = 1;
++u8 disable_CS_man = 0;
++u8 CTSTimeOut_man = 0;
++u8 ACKTimeOut_man = 0;
++u8 CTSTimeOut = 0;
++u8 ACKTimeOut = 0;
+ 
+ module_param_named(txpower,tx_power_man,byte,0444);
+ MODULE_PARM_DESC(txpower,"Manual TX power setting, default 58, max 63");
+@@ -59,7 +65,7 @@ module_param_named(aifs,aifs_man,byte,0444);
+ MODULE_PARM_DESC(aifs,"AIFS setting, default 2");
+ 
+ module_param_named(cck_sifs,cck_sifs_man,byte,0444);
+-MODULE_PARM_DESC(cck_sifs,"CCK SIFS setting, default 10");
++MODULE_PARM_DESC(cck_sifs,"AR_USEC_TX_LAT, default 10");
+ 
+ module_param_named(ofdm_sifs,ofdm_sifs_man,byte,0444);
+ MODULE_PARM_DESC(ofdm_sifs,"OFDM SIFS setting, default 16");
+@@ -70,6 +76,15 @@ MODULE_PARM_DESC(slottime,"Slottime setting, default 9");
+ module_param_named(thresh62,thresh62_man,byte,0444);
+ MODULE_PARM_DESC(thresh62,"CCA THRESH62 setting, default 28");
+ 
++ module_param_named(disable_CS,disable_CS_man,byte,0444);
++ MODULE_PARM_DESC(disable_CS,"Disable Carrier Sense  default 0");
++
++module_param_named(CTSTimeOut,CTSTimeOut_man,byte,0444);
++ MODULE_PARM_DESC(CTSTimeOut,"CTSTimeOut  default 0");
++ 
++ module_param_named(ACKTimeOut,ACKTimeOut_man,byte,0444);
++ MODULE_PARM_DESC(ACKTimeOut,"ACKTimeOut  default 0");
++
+ 
+ static void ath9k_hw_set_clockrate(struct ath_hw *ah)
+ {
+@@ -1053,6 +1068,7 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
+ 	int sifstime;
+ 	int rx_lat = 0, tx_lat = 0, eifs = 0;
+ 	u32 reg;
++	int qnum=0;
+ 
+ 	ath_dbg(ath9k_hw_common(ah), RESET, "ah->misc_mode 0x%x\n",
+ 		ah->misc_mode);
+@@ -1111,7 +1127,8 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
+ 
+ 	/* As defined by IEEE 802.11-2007 17.3.8.6 */
+ //	slottime += 3 * ah->coverage_class;
+-       slottime = slottime_man;
++	//As defined in driver config
++    slottime = slottime_man;
+ 	acktimeout = slottime + sifstime + ack_offset;
+ 	ctstimeout = acktimeout;
+ 
+@@ -1136,6 +1153,26 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
+ 		ah->dynack.ackto = acktimeout;
+ 	}
+ 
++	bool register_override=false;	
++	if (ofdm_sifs_man!=16) {
++			sifstime=ofdm_sifs_man;
++			eifs=ofdm_sifs_man;	
++			register_override=true;	
++	}
++	if (ACKTimeOut_man!=0){
++			acktimeout=	ACKTimeOut_man;
++			register_override=true;
++	}
++	if (CTSTimeOut_man!=0){
++			ctstimeout=CTSTimeOut_man;
++			register_override=true;
++	}
++	
++	if (cck_sifs_man!=10){
++		tx_lat=cck_sifs_man*10;
++		register_override=true;
++	}
++
+ 	ath9k_hw_set_sifs_time(ah, sifstime);
+ 	ath9k_hw_setslottime(ah, slottime);
+ 	ath9k_hw_set_ack_timeout(ah, acktimeout);
+@@ -1150,6 +1187,20 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
+ 		SM(tx_lat, AR_USEC_TX_LAT),
+ 		AR_USEC_TX_LAT | AR_USEC_RX_LAT | AR_USEC_USEC);
+ 
++	ath_err(common,"SET rx_lat:%d, tx_lat:%d, sifstime:%d, eifs:%d, slottime:%d, acktimeout:%d, ctstimeout:%d",rx_lat, tx_lat, sifstime, eifs, slottime, acktimeout, ctstimeout);
++
++	if(disable_CS_man==1){
++ 		ath_err(ath9k_hw_common(ah),  "Disabled Carrier Sense! %d !\n",disable_CS, disable_CS_man);
++ 		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_RX_CLEAR);
++    	REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_IGNORE_VIRT_CS);
++ 		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
++	}
++
++	if (register_override || disable_CS_man==1){	
++		for (qnum=0;qnum<7;qnum++)
++			REG_WRITE(ah, AR_DLCL_IFS(qnum), 0);
++	}
++
+ }
+ EXPORT_SYMBOL(ath9k_hw_init_global_settings);
+ 
+diff --git a/mac.c b/mac.c
+index 737f329..136e48b 100644
+--- a/mac.c
++++ b/mac.c
+@@ -223,8 +223,8 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
+ 	if (qinfo->tqi_aifs != ATH9K_TXQ_USEDEFAULT)
+ 		qi->tqi_aifs = min(qinfo->tqi_aifs, 255U);
+ 	else
+-//		qi->tqi_aifs = INIT_AIFS;
+-               qi->tqi_aifs = aifs_man;
++		qi->tqi_aifs = INIT_AIFS;
++
+ 	if (qinfo->tqi_cwmin != ATH9K_TXQ_USEDEFAULT) {
+ 		cw = min(qinfo->tqi_cwmin, 1024U);
+ 		qi->tqi_cwmin = 1;
+@@ -253,6 +253,20 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
+ 	qi->tqi_burstTime = qinfo->tqi_burstTime;
+ 	qi->tqi_readyTime = qinfo->tqi_readyTime;
+ 
++	bool override=false;
++	if (cwmax_man!=15){
++			qi->tqi_cwmax=cwmax_man;
++			override=true;
++	}
++	if (cwmin_man!=7){
++			qi->tqi_cwmin=cwmin_man;
++			override=true;
++	}
++	if (aifs_man!=2){
++	        qi->tqi_aifs = aifs_man;
++			override=true;
++	}
++
+ 	switch (qinfo->tqi_subtype) {
+ 	case ATH9K_WME_UPSD:
+ 		if (qi->tqi_type == ATH9K_TX_QUEUE_DATA)
+@@ -262,6 +276,11 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
+ 		break;
+ 	}
+ 
++	if (override){
++		REG_WRITE(ah, AR_DLCL_IFS(q), 0);
++		ath_err(common, "SET cwmax:%d, cwmin:%d, aifs:%d  for queu:%d", qi->tqi_cwmax, qi->tqi_cwmin, qi->tqi_aifs,q);
++	}
++
+ 	return true;
+ }
+ EXPORT_SYMBOL(ath9k_hw_set_txq_props);
