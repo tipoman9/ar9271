@@ -253,12 +253,19 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 	qi->tqi_burstTime = qinfo->tqi_burstTime;
 	qi->tqi_readyTime = qinfo->tqi_readyTime;
 
-	if (cwmax_man!=15)
+	bool override=false;
+	if (cwmax_man!=15){
 			qi->tqi_cwmax=cwmax_man;
+			override=true;
+	}
 	if (cwmin_man!=7)
 			qi->tqi_cwmin=cwmin_man;
-	if (aifs_man!=2)
+			override=true;
+	}
+	if (aifs_man!=2){
 	        qi->tqi_aifs = aifs_man;
+			override=true;
+	}
 
 	switch (qinfo->tqi_subtype) {
 	case ATH9K_WME_UPSD:
@@ -269,10 +276,10 @@ bool ath9k_hw_set_txq_props(struct ath_hw *ah, int q,
 		break;
 	}
 
-	
-	REG_WRITE(ah, AR_DLCL_IFS(q), 0);
-
-	ath_err(common, "SET cwmax:%d, cwmin:%d, aifs:%d  for queu:%d", qi->tqi_cwmax, qi->tqi_cwmin, qi->tqi_aifs,q);
+	if (override){
+		REG_WRITE(ah, AR_DLCL_IFS(q), 0);
+		ath_err(common, "SET cwmax:%d, cwmin:%d, aifs:%d  for queu:%d", qi->tqi_cwmax, qi->tqi_cwmin, qi->tqi_aifs,q);
+	}
 
 	return true;
 }

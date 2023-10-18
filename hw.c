@@ -65,7 +65,7 @@ module_param_named(aifs,aifs_man,byte,0444);
 MODULE_PARM_DESC(aifs,"AIFS setting, default 2");
 
 module_param_named(cck_sifs,cck_sifs_man,byte,0444);
-MODULE_PARM_DESC(cck_sifs,"CCK SIFS setting, default 10");
+MODULE_PARM_DESC(cck_sifs,"AR_USEC_TX_LAT, default 10");
 
 module_param_named(ofdm_sifs,ofdm_sifs_man,byte,0444);
 MODULE_PARM_DESC(ofdm_sifs,"OFDM SIFS setting, default 16");
@@ -1153,18 +1153,25 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 		ah->dynack.ackto = acktimeout;
 	}
 
+	bool register_override=false;	
 	if (ofdm_sifs_man!=16) {
 			sifstime=ofdm_sifs_man;
-			eifs=ofdm_sifs_man;		
+			eifs=ofdm_sifs_man;	
+			register_override=true;	
 	}
-	if (ACKTimeOut_man!=0)
+	if (ACKTimeOut_man!=0){
 			acktimeout=	ACKTimeOut_man;
-	if (CTSTimeOut_man!=0)
+			register_override=true;
+	}
+	if (CTSTimeOut_man!=0){
 			ctstimeout=CTSTimeOut_man;
+			register_override=true;
+	}
 	
-
-	if (cck_sifs_man!=10)
+	if (cck_sifs_man!=10){
 		tx_lat=cck_sifs_man*10;
+		register_override=true;
+	}
 
 	ath9k_hw_set_sifs_time(ah, sifstime);
 	ath9k_hw_setslottime(ah, slottime);
@@ -1182,15 +1189,17 @@ void ath9k_hw_init_global_settings(struct ath_hw *ah)
 
 	ath_err(common,"SET rx_lat:%d, tx_lat:%d, sifstime:%d, eifs:%d, slottime:%d, acktimeout:%d, ctstimeout:%d",rx_lat, tx_lat, sifstime, eifs, slottime, acktimeout, ctstimeout);
 
-	 if(disable_CS_man==1){
- 		ath_err(ath9k_hw_common(ah),  "Disable Carrier Sense! %d !\n",disable_CS, disable_CS_man);
+	if(disable_CS_man==1){
+ 		ath_err(ath9k_hw_common(ah),  "Disabled Carrier Sense! %d !\n",disable_CS, disable_CS_man);
  		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_RX_CLEAR);
     	REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_IGNORE_VIRT_CS);
  		REG_SET_BIT(ah, AR_DIAG_SW, AR_DIAG_FORCE_CH_IDLE_HIGH);
 	}
-	
+
+	if (register_overridetrue || disable_CS_man==1){	
 		for (qnum=0;qnum<7;qnum++)
 			REG_WRITE(ah, AR_DLCL_IFS(qnum), 0);
+	}
 
 }
 EXPORT_SYMBOL(ath9k_hw_init_global_settings);
